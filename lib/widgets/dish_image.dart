@@ -28,7 +28,7 @@ class DishImage extends StatelessWidget {
         child: Icon(
           Icons.restaurant,
           size: 40,
-          color: colors.onPrimaryContainer.withOpacity(0.6),
+          color: colors.onPrimaryContainer.withValues(alpha: 0.6),
         ),
       ),
     );
@@ -51,7 +51,7 @@ class DishImage extends StatelessWidget {
             ),
           );
         },
-        errorBuilder: (_, __, ___) => fallback,
+        errorBuilder: (_, _, _) => fallback,
       );
     }
 

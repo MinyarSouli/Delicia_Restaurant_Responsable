@@ -106,11 +106,13 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                           validator: (value) {
                             final v = value?.trim() ?? '';
-                            if (v.isEmpty)
+                            if (v.isEmpty) {
                               return 'Veuillez saisir votre e-mail';
+                            }
                             final ok = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
-                            if (!ok.hasMatch(v))
+                            if (!ok.hasMatch(v)) {
                               return 'Adresse e-mail invalide';
+                            }
                             return null;
                           },
                         ),

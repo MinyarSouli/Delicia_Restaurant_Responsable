@@ -184,7 +184,7 @@ class _CartePageState extends State<CartePage> {
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     itemCount: menuCategories.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 10),
+                    separatorBuilder: (context, index) => const SizedBox(width: 10),
                     itemBuilder: (context, index) {
                       final category = menuCategories[index];
                       final selected = !searching && index == _selectedCategory;

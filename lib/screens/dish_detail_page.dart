@@ -271,7 +271,7 @@ class _SupplementTile extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: selected ? colors.primaryContainer.withOpacity(0.4) : null,
+        color: selected ? colors.primaryContainer.withValues(alpha: 0.4) : null,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: selected ? colors.primary : colors.outlineVariant,
