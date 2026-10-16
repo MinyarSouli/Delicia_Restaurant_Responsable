@@ -65,6 +65,7 @@ final List<Dish> menuDishes = [
     category: 'Fast-food',
     image: _img('1568901346375-23c9450c58cd'),
     supplements: _extrasFastFood,
+    isPopular: true,
   ),
   Dish(
     id: 'ff2',
@@ -74,6 +75,7 @@ final List<Dish> menuDishes = [
     category: 'Fast-food',
     image: _img('1513104890138-7c749659a591'),
     supplements: _extrasFastFood,
+    isPopular: true,
   ),
   Dish(
     id: 'ff3',
@@ -88,12 +90,13 @@ final List<Dish> menuDishes = [
   // ---------- Plats ----------
   Dish(
     id: 'pl1',
-    name: 'Spaghetti Bolognaise',
-    description: 'Spaghetti al dente, sauce bolognaise mijotée lentement et parmesan râpé.',
+    name: 'Pennes Bolognaise',
+    description: 'Pennes al dente, sauce bolognaise mijotée lentement et parmesan râpé.',
     price: 16.500,
     category: 'Plats',
     image: _img('1621996346565-e3dbc646d9a9'),
     supplements: _extrasPlats,
+    isPopular: true,
   ),
   Dish(
     id: 'pl2',
@@ -166,13 +169,13 @@ final List<Dish> menuDishes = [
   ),
   Dish(
     id: 'bo3',
-    name: 'Milkshake Fraise',
-    description:
-        'Lait glacé mixé avec des fraises fraîches et une glace onctueuse.',
+    name: 'Milkshake Chocolat',
+    description: 'Milkshake au chocolat crémeux, réalisé avec du chocolat noir fondant et de la glace vanille.',
     price: 7.000,
     category: 'Boissons',
     image: _img('1572490122747-3968b75cc699'),
     supplements: _extrasBoissons,
+    isPopular: true,
   ),
 
   // ---------- Desserts ----------

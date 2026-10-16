@@ -15,6 +15,7 @@ class Dish {
   final String category; // Fast-food, Plats, Café, Boissons, Desserts
   final String image; // URL (http...) ou chemin d'asset (assets/images/...)
   final List<Supplement> supplements;
+  final bool isPopular; // true si le plat doit apparaître dans la section "Populaires"
 
   const Dish({
     required this.id,
@@ -24,6 +25,7 @@ class Dish {
     required this.category,
     required this.image,
     this.supplements = const [],
+    this.isPopular = false,
   });
 }
 
