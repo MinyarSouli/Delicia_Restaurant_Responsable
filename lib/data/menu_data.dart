@@ -137,6 +137,7 @@ final List<Dish> menuDishes = [
     category: 'Café',
     image: _img('1572442388796-11668a67e53d'),
     supplements: _extrasCafe,
+    isPopular: true,
   ),
   Dish(
     id: 'ca3',
@@ -186,6 +187,7 @@ final List<Dish> menuDishes = [
     price: 8.500,
     category: 'Desserts',
     image: _img('1606313564200-e75d5e30476c'),
+    isPopular: true,
     supplements: _extrasDesserts,
   ),
   Dish(

@@ -9,6 +9,10 @@ import '../services/cart_service.dart';
 import '../widgets/dish_image.dart';
 import '../widgets/table_number_dialog.dart';
 import 'dish_detail_page.dart';
+import '../widgets/dish_card.dart';
+import '../widgets/popular_dish_card.dart';
+import '../widgets/cart_badge_button.dart';
+import '../widgets/category_chips.dart';
 import 'login_page.dart';
 
 /// Page principale : consultation du menu par catégories.
@@ -128,6 +132,8 @@ class _CartePageState extends State<CartePage> {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
+                        const Spacer(),
+                        const CartBadgeButton(),
                       ],
                     ),
                     const SizedBox(height: 4),
@@ -178,49 +184,44 @@ class _CartePageState extends State<CartePage> {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.only(top: 20),
-                child: SizedBox(
-                  height: 44,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    itemCount: menuCategories.length,
-                    separatorBuilder: (context, index) => const SizedBox(width: 10),
-                    itemBuilder: (context, index) {
-                      final category = menuCategories[index];
-                      final selected = !searching && index == _selectedCategory;
-                      return ChoiceChip(
-                        avatar: Icon(
-                          category.icon,
-                          size: 18,
-                          color: selected
-                              ? colors.onPrimary
-                              : colors.onSurfaceVariant,
-                        ),
-                        label: Text(category.name),
-                        selected: selected,
-                        showCheckmark: false,
-                        selectedColor: colors.primary,
-                        labelStyle: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: selected ? colors.onPrimary : colors.onSurface,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                        onSelected: (_) {
-                          _searchController.clear();
-                          setState(() {
-                            _query = '';
-                            _selectedCategory = index;
-                          });
-                        },
-                      );
-                    },
-                  ),
+                child: CategoryChips(
+                  selectedIndex: _selectedCategory,
+                  onSelect: (index) {
+                    _searchController.clear();
+                    setState(() {
+                      _query = '';
+                      _selectedCategory = index;
+                    });
+                  },
+                  searching: searching,
                 ),
               ),
             ),
 
+                        // ----- Section Populaires -----
+            SliverToBoxAdapter(
+                child: Visibility(
+                  visible: !searching,
+                  child: SizedBox(
+                    height: 120,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      itemCount: menuDishes.where((d) => d.isPopular).length,
+                      itemBuilder: (context, index) {
+                        final popular = menuDishes.where((d) => d.isPopular).toList()[index];
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 12),
+                          child: PopularDishCard(
+                            dish: popular,
+                            onQuickAdd: () => _quickAdd(popular),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
             // ----- Titre de section -----
             SliverToBoxAdapter(
               child: Padding(
@@ -280,11 +281,13 @@ class _CartePageState extends State<CartePage> {
                   itemCount: dishes.length,
                   itemBuilder: (context, index) {
                     final dish = dishes[index];
-                    return _DishCard(
+                    return DishCard(
                       dish: dish,
                       onTap: () => _openDetail(dish),
                       onQuickAdd: () => _quickAdd(dish),
                     );
+
+
                   },
                 ),
               ),
@@ -359,107 +362,7 @@ class _CartePageState extends State<CartePage> {
   }
 }
 
-/// Carte d'un plat : image, nom, description, prix et bouton "+".
-class _DishCard extends StatelessWidget {
-  final Dish dish;
-  final VoidCallback onTap;
-  final VoidCallback onQuickAdd;
 
-  const _DishCard({
-    required this.dish,
-    required this.onTap,
-    required this.onQuickAdd,
-  });
 
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
 
-    return Card(
-      elevation: 0,
-      clipBehavior: Clip.antiAlias,
-      color: colors.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: colors.outlineVariant),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Image + bouton d'ajout rapide
-            Expanded(
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Hero(
-                    tag: 'dish-${dish.id}',
-                    child: DishImage(path: dish.image),
-                  ),
-                  Positioned(
-                    right: 8,
-                    bottom: 8,
-                    child: Material(
-                      color: colors.primary,
-                      shape: const CircleBorder(),
-                      elevation: 3,
-                      child: InkWell(
-                        customBorder: const CircleBorder(),
-                        onTap: onQuickAdd,
-                        child: Padding(
-                          padding: const EdgeInsets.all(8),
-                          child: Icon(
-                            Icons.add,
-                            size: 20,
-                            color: colors.onPrimary,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // Texte
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    dish.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    dish.description,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: textTheme.bodySmall?.copyWith(
-                      color: colors.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    formatPrice(dish.price),
-                    style: textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: colors.primary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+  
