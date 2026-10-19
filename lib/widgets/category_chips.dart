@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
-import '../models/app_user.dart'; // maybe not needed, but keep minimal
-import '../models/dish.dart';
-import '../models/client_info.dart';
-import '../services/auth_service.dart';
-import '../services/cart_service.dart';
 import '../data/menu_data.dart';
-import '../widgets/dish_image.dart';
+import '../theme/app_colors.dart';
 
 /// Widget affichant les puces de catégories sous forme de ChoiceChip.
 /// Utilisé dans la page CartePage.
+/// Non sélectionné : fond crème, bordure pêche.
+/// Sélectionné : fond orange, texte blanc.
 class CategoryChips extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelect;
@@ -23,7 +20,6 @@ class CategoryChips extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     return SizedBox(
       height: 44,
       child: ListView.separated(
@@ -33,24 +29,43 @@ class CategoryChips extends StatelessWidget {
         separatorBuilder: (_, __) => const SizedBox(width: 10),
         itemBuilder: (context, index) {
           final category = menuCategories[index];
+          // Une puce est sélectionnée si on n'est pas en mode recherche
+          // et que l'index correspond à la catégorie active.
           final selected = !searching && index == selectedIndex;
+
           return ChoiceChip(
+            // Icône de la catégorie
             avatar: Icon(
               category.icon,
               size: 18,
-              color: selected ? colors.onPrimary : colors.onSurfaceVariant,
+              // Blanc si sélectionné, brun si non sélectionné
+              color: selected ? Colors.white : AppColors.textSecondary,
             ),
             label: Text(category.name),
             selected: selected,
             showCheckmark: false,
-            selectedColor: colors.primary,
+
+            // Couleurs selon l'état
+            selectedColor: AppColors.orangePrimary, // fond orange si sélectionné
+            backgroundColor: AppColors.cardCream,    // fond crème si non sélectionné
+
+            // Texte : blanc si sélectionné, brun si non sélectionné
             labelStyle: TextStyle(
               fontWeight: FontWeight.w600,
-              color: selected ? colors.onPrimary : colors.onSurface,
+              color: selected ? Colors.white : AppColors.textBrown,
             ),
+
+            // Bordure : pas de noir. Fine bordure pêche si non sélectionné,
+            // aucune bordure si sélectionné (le fond orange suffit).
+            side: selected
+                ? BorderSide.none
+                : const BorderSide(color: AppColors.peachBorder, width: 1),
+
+            // Forme arrondie (pilule)
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(30),
             ),
+
             onSelected: (_) => onSelect(index),
           );
         },

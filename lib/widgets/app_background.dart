@@ -1,5 +1,5 @@
 // lib/widgets/app_background.dart
-// Widget affichant un dégradé vertical pêche derrière son enfant.
+// Widget affichant un dégradé vertical pêche qui remplit tout l'écran.
 
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
@@ -16,6 +16,8 @@ class AppBackground extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
+      height: double.infinity,
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,

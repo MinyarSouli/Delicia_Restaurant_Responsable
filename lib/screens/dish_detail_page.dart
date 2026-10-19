@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../models/dish.dart';
 import '../services/cart_service.dart';
+import '../theme/app_colors.dart';
 import '../widgets/dish_image.dart';
 
-/// Détail d'un plat : image, description, prix, suppléments et quantité.
+/// Détail d'un plat : image dans une grande carte crème avec marge,
+/// bouton retour rond, nom, prix, suppléments en cartes sélectionnables,
+/// et bouton du bas « Ajouter au panier • total » plein orange.
 /// Retourne true à l'écran précédent si le plat a été ajouté au panier.
 class DishDetailPage extends StatefulWidget {
   final Dish dish;
@@ -42,205 +45,344 @@ class _DishDetailPageState extends State<DishDetailPage> {
   @override
   Widget build(BuildContext context) {
     final dish = widget.dish;
-    final colors = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          // ----- Grande image avec bouton retour -----
-          SliverAppBar(
-            expandedHeight: 320,
-            pinned: true,
-            backgroundColor: colors.surface,
-            surfaceTintColor: Colors.transparent,
-            leading: Padding(
-              padding: const EdgeInsets.all(8),
-              child: CircleAvatar(
-                backgroundColor: colors.surface,
-                child: IconButton(
-                  icon: Icon(Icons.arrow_back, color: colors.onSurface),
-                  tooltip: 'Retour',
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ),
-            ),
-            flexibleSpace: FlexibleSpaceBar(
-              background: Hero(
-                tag: 'dish-${dish.id}',
-                child: DishImage(path: dish.image),
-              ),
-            ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [AppColors.peachTop, AppColors.peachBottom],
           ),
-
-          // ----- Contenu -----
-          SliverToBoxAdapter(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 600),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              dish.name,
-                              style: textTheme.headlineSmall?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            formatPrice(dish.price),
-                            style: textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: colors.primary,
-                            ),
+        ),
+        child: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              // Barre d'en-tête avec bouton retour rond
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: AppColors.cardCream,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF3A2216).withValues(alpha: 0.1),
+                            blurRadius: 10,
+                            offset: const Offset(0, 3),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      Chip(
-                        label: Text(dish.category),
-                        visualDensity: VisualDensity.compact,
-                        side: BorderSide.none,
-                        backgroundColor: colors.secondaryContainer,
+                      child: IconButton(
+                        icon: const Icon(
+                          Icons.arrow_back_rounded,
+                          color: AppColors.textBrown,
+                          size: 22,
+                        ),
+                        tooltip: 'Retour',
+                        onPressed: () => Navigator.pop(context),
                       ),
-                      const SizedBox(height: 12),
-                      Text(
-                        dish.description,
-                        style: textTheme.bodyLarge?.copyWith(
-                          height: 1.5,
-                          color: colors.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        dish.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textBrown,
                         ),
                       ),
+                    ),
+                  ],
+                ),
+              ),
 
-                      // ----- Suppléments -----
-                      if (dish.supplements.isNotEmpty) ...[
-                        const SizedBox(height: 28),
-                        Text(
-                          'Personnalisez votre commande',
-                          style: textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Suppléments (facultatif)',
-                          style: textTheme.bodySmall?.copyWith(
-                            color: colors.onSurfaceVariant,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        for (var i = 0; i < dish.supplements.length; i++)
-                          _SupplementTile(
-                            supplement: dish.supplements[i],
-                            selected: _selected.contains(i),
-                            onChanged: (checked) => setState(() {
-                              if (checked) {
-                                _selected.add(i);
-                              } else {
-                                _selected.remove(i);
-                              }
-                            }),
-                          ),
-                      ],
-
-                      // ----- Quantité -----
-                      const SizedBox(height: 24),
-                      Row(
+              // Contenu défilable
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 600),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Quantité',
-                            style: textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const Spacer(),
+                          // 1. Grande carte crème avec image arrondie et marge
                           Container(
                             decoration: BoxDecoration(
-                              color: colors.surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(30),
+                              color: AppColors.cardCream,
+                              borderRadius: BorderRadius.circular(28),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF3A2216)
+                                      .withValues(alpha: 0.12),
+                                  blurRadius: 18,
+                                  offset: const Offset(0, 6),
+                                ),
+                              ],
+                            ),
+                            padding: const EdgeInsets.all(12),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(22),
+                              child: AspectRatio(
+                                aspectRatio: 16 / 11,
+                                child: Hero(
+                                  tag: 'dish-${dish.id}',
+                                  child: DishImage(
+                                    path: dish.image,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(height: 20),
+
+                          // 2. Nom et Prix
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  dish.name,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: textTheme.headlineSmall?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.textBrown,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                formatPrice(dish.price),
+                                style: textTheme.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.orangePrimary,
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 8),
+
+                          // Catégorie
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.cardCream,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: AppColors.peachBorder,
+                                width: 1,
+                              ),
+                            ),
+                            child: Text(
+                              dish.category,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textBrown,
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(height: 14),
+
+                          // Description
+                          Text(
+                            dish.description,
+                            style: textTheme.bodyMedium?.copyWith(
+                              height: 1.5,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+
+                          // 3. Suppléments en cartes sélectionnables
+                          if (dish.supplements.isNotEmpty) ...[
+                            const SizedBox(height: 24),
+                            Text(
+                              'Personnalisez votre commande',
+                              style: textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textBrown,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Suppléments (facultatif)',
+                              style: textTheme.bodySmall?.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            for (var i = 0; i < dish.supplements.length; i++)
+                              _SupplementTile(
+                                supplement: dish.supplements[i],
+                                selected: _selected.contains(i),
+                                onChanged: (checked) => setState(() {
+                                  if (checked) {
+                                    _selected.add(i);
+                                  } else {
+                                    _selected.remove(i);
+                                  }
+                                }),
+                              ),
+                          ],
+
+                          // 4. Quantité
+                          const SizedBox(height: 20),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.cardCream,
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF3A2216)
+                                      .withValues(alpha: 0.08),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
                             ),
                             child: Row(
                               children: [
-                                IconButton(
-                                  tooltip: 'Diminuer',
-                                  icon: const Icon(Icons.remove),
-                                  onPressed: _quantity > 1
-                                      ? () => setState(() => _quantity--)
-                                      : null,
-                                ),
-                                SizedBox(
-                                  width: 32,
-                                  child: Text(
-                                    '$_quantity',
-                                    textAlign: TextAlign.center,
-                                    style: textTheme.titleMedium?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                                Text(
+                                  'Quantité',
+                                  style: textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.textBrown,
                                   ),
                                 ),
-                                IconButton(
-                                  tooltip: 'Augmenter',
-                                  icon: const Icon(Icons.add),
-                                  onPressed: _quantity < 20
-                                      ? () => setState(() => _quantity++)
-                                      : null,
+                                const Spacer(),
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: AppColors.peachTop,
+                                    borderRadius: BorderRadius.circular(24),
+                                    border: Border.all(
+                                      color: AppColors.peachBorder,
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      IconButton(
+                                        tooltip: 'Diminuer',
+                                        icon: const Icon(
+                                          Icons.remove,
+                                          size: 18,
+                                          color: AppColors.textBrown,
+                                        ),
+                                        onPressed: _quantity > 1
+                                            ? () => setState(() => _quantity--)
+                                            : null,
+                                      ),
+                                      SizedBox(
+                                        width: 32,
+                                        child: Text(
+                                          '$_quantity',
+                                          textAlign: TextAlign.center,
+                                          style: textTheme.titleMedium?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                            color: AppColors.textBrown,
+                                          ),
+                                        ),
+                                      ),
+                                      IconButton(
+                                        tooltip: 'Augmenter',
+                                        icon: const Icon(
+                                          Icons.add,
+                                          size: 18,
+                                          color: AppColors.orangePrimary,
+                                        ),
+                                        onPressed: _quantity < 20
+                                            ? () => setState(() => _quantity++)
+                                            : null,
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ],
                             ),
                           ),
                         ],
                       ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-
-      // ----- Barre du bas : bouton d'ajout avec le total -----
-      bottomNavigationBar: Material(
-        elevation: 8,
-        color: colors.surface,
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-            child: FilledButton(
-              onPressed: _addToCart,
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(54),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.shopping_bag_outlined),
-                  const SizedBox(width: 10),
-                  const Text(
-                    'Ajouter au panier',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    '•  ${formatPrice(_total)}',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                ],
+                ),
               ),
+            ],
+          ),
+        ),
+      ),
+
+      // Barre du bas : bouton plein orange « Ajouter au panier • total »
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: AppColors.cardCream,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF3A2216).withValues(alpha: 0.12),
+              blurRadius: 16,
+              offset: const Offset(0, -4),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+        child: SafeArea(
+          top: false,
+          child: FilledButton(
+            onPressed: _addToCart,
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(54),
+              backgroundColor: AppColors.orangePrimary,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              elevation: 0,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.shopping_bag_outlined, color: Colors.white),
+                const SizedBox(width: 10),
+                const Text(
+                  'Ajouter au panier',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '•  ${formatPrice(_total)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -249,7 +391,7 @@ class _DishDetailPageState extends State<DishDetailPage> {
   }
 }
 
-/// Une ligne de supplément avec case à cocher et prix.
+/// Carte de supplément personnalisée, sans aucun contour noir.
 class _SupplementTile extends StatelessWidget {
   final Supplement supplement;
   final bool selected;
@@ -263,7 +405,6 @@ class _SupplementTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     final priceText = supplement.price == 0
         ? 'Gratuit'
         : '+ ${formatPrice(supplement.price)}';
@@ -271,23 +412,45 @@ class _SupplementTile extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: selected ? colors.primaryContainer.withValues(alpha: 0.4) : null,
-        borderRadius: BorderRadius.circular(14),
+        color: selected
+            ? AppColors.peachTop.withValues(alpha: 0.7)
+            : AppColors.cardCream,
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: selected ? colors.primary : colors.outlineVariant,
+          color: selected ? AppColors.orangePrimary : AppColors.peachBorder,
           width: selected ? 1.5 : 1,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF3A2216).withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: CheckboxListTile(
         value: selected,
         onChanged: (value) => onChanged(value ?? false),
+        activeColor: AppColors.orangePrimary,
+        checkColor: Colors.white,
         controlAffinity: ListTileControlAffinity.trailing,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           supplement.name,
-          style: const TextStyle(fontWeight: FontWeight.w600),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+            color: AppColors.textBrown,
+          ),
         ),
-        subtitle: Text(priceText),
+        subtitle: Text(
+          priceText,
+          style: const TextStyle(
+            color: AppColors.textSecondary,
+            fontSize: 13,
+          ),
+        ),
       ),
     );
   }

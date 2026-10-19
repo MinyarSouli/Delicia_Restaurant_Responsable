@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
 import '../widgets/auth_widgets.dart';
+import '../theme/app_colors.dart';
 
 /// Page de création de compte.
 /// Retourne un [AppUser] à l'écran précédent quand l'inscription réussit.
+/// Aucune logique (AuthService, validations, navigation) n'est modifiée.
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
 
@@ -60,195 +62,210 @@ class _RegisterPageState extends State<RegisterPage> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-
     return Scaffold(
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            const AuthHeader(
-              title: 'Créer un compte',
-              subtitle: 'Quelques secondes pour commander en toute simplicité',
-              showBack: true,
-            ),
-            Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 480),
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const SizedBox(height: 8),
+      // Pas de couleur sur le Scaffold : le fond est géré par le Container
+      backgroundColor: Colors.transparent,
+      body: Container(
+        // Dégradé pêche sur tout l'écran (même ambiance que le menu)
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [AppColors.peachTop, AppColors.peachBottom],
+          ),
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              // Bandeau orange avec logo Délicia, titre et sous-titre
+              const AuthHeader(
+                title: 'Créer un compte',
+                subtitle: 'Quelques secondes pour commander en toute simplicité',
+                showBack: true,
+              ),
 
-                        // ----- Nom et prénom -----
-                        TextFormField(
-                          controller: _nameController,
-                          textCapitalization: TextCapitalization.words,
-                          textInputAction: TextInputAction.next,
-                          decoration: authDecoration(
-                            context,
-                            label: 'Nom et prénom',
-                            hint: 'Ex : Sarra Ben Ali',
-                            icon: Icons.person_outline,
-                          ),
-                          validator: (value) {
-                            final v = value?.trim() ?? '';
-                            if (v.isEmpty) {
-                              return 'Veuillez saisir votre nom et prénom';
-                            }
-                            if (v.length < 3) return 'Le nom est trop court';
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 16),
+              // Corps du formulaire centré, largeur max 480 px
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 480),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const SizedBox(height: 8),
 
-                        // ----- E-mail -----
-                        TextFormField(
-                          controller: _emailController,
-                          keyboardType: TextInputType.emailAddress,
-                          textInputAction: TextInputAction.next,
-                          decoration: authDecoration(
-                            context,
-                            label: 'Adresse e-mail',
-                            hint: 'exemple@mail.com',
-                            icon: Icons.email_outlined,
-                          ),
-                          validator: (value) {
-                            final v = value?.trim() ?? '';
-                            if (v.isEmpty)
-                              return 'Veuillez saisir votre e-mail';
-                            final ok = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
-                            if (!ok.hasMatch(v))
-                              return 'Adresse e-mail invalide';
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 16),
-
-                        // ----- Mot de passe -----
-                        TextFormField(
-                          controller: _passwordController,
-                          obscureText: _obscurePassword,
-                          textInputAction: TextInputAction.next,
-                          decoration: authDecoration(
-                            context,
-                            label: 'Mot de passe',
-                            hint: '6 caractères minimum',
-                            icon: Icons.lock_outline,
-                            suffix: IconButton(
-                              tooltip: _obscurePassword
-                                  ? 'Afficher le mot de passe'
-                                  : 'Masquer le mot de passe',
-                              icon: Icon(
-                                _obscurePassword
-                                    ? Icons.visibility_outlined
-                                    : Icons.visibility_off_outlined,
-                              ),
-                              onPressed: () => setState(
-                                () => _obscurePassword = !_obscurePassword,
-                              ),
+                          // ----- Nom et prénom -----
+                          TextFormField(
+                            controller: _nameController,
+                            textCapitalization: TextCapitalization.words,
+                            textInputAction: TextInputAction.next,
+                            decoration: authDecoration(
+                              context,
+                              label: 'Nom et prénom',
+                              hint: 'Ex : Sarra Ben Ali',
+                              icon: Icons.person_outline,
                             ),
+                            validator: (value) {
+                              final v = value?.trim() ?? '';
+                              if (v.isEmpty) {
+                                return 'Veuillez saisir votre nom et prénom';
+                              }
+                              if (v.length < 3) return 'Le nom est trop court';
+                              return null;
+                            },
                           ),
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Veuillez saisir un mot de passe';
-                            }
-                            if (value.length < 6) {
-                              return 'Au moins 6 caractères';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 16),
+                          const SizedBox(height: 16),
 
-                        // ----- Confirmation -----
-                        TextFormField(
-                          controller: _confirmController,
-                          obscureText: _obscureConfirm,
-                          textInputAction: TextInputAction.done,
-                          onFieldSubmitted: (_) => _register(),
-                          decoration: authDecoration(
-                            context,
-                            label: 'Confirmer le mot de passe',
-                            icon: Icons.lock_reset_outlined,
-                            suffix: IconButton(
-                              tooltip: _obscureConfirm
-                                  ? 'Afficher le mot de passe'
-                                  : 'Masquer le mot de passe',
-                              icon: Icon(
-                                _obscureConfirm
-                                    ? Icons.visibility_outlined
-                                    : Icons.visibility_off_outlined,
-                              ),
-                              onPressed: () => setState(
-                                () => _obscureConfirm = !_obscureConfirm,
+                          // ----- E-mail -----
+                          TextFormField(
+                            controller: _emailController,
+                            keyboardType: TextInputType.emailAddress,
+                            textInputAction: TextInputAction.next,
+                            decoration: authDecoration(
+                              context,
+                              label: 'Adresse e-mail',
+                              hint: 'exemple@mail.com',
+                              icon: Icons.email_outlined,
+                            ),
+                            validator: (value) {
+                              final v = value?.trim() ?? '';
+                              if (v.isEmpty)
+                                return 'Veuillez saisir votre e-mail';
+                              final ok = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+                              if (!ok.hasMatch(v))
+                                return 'Adresse e-mail invalide';
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 16),
+
+                          // ----- Mot de passe -----
+                          TextFormField(
+                            controller: _passwordController,
+                            obscureText: _obscurePassword,
+                            textInputAction: TextInputAction.next,
+                            decoration: authDecoration(
+                              context,
+                              label: 'Mot de passe',
+                              hint: '6 caractères minimum',
+                              icon: Icons.lock_outline,
+                              suffix: IconButton(
+                                tooltip: _obscurePassword
+                                    ? 'Afficher le mot de passe'
+                                    : 'Masquer le mot de passe',
+                                icon: Icon(
+                                  _obscurePassword
+                                      ? Icons.visibility_outlined
+                                      : Icons.visibility_off_outlined,
+                                ),
+                                onPressed: () => setState(
+                                  () => _obscurePassword = !_obscurePassword,
+                                ),
                               ),
                             ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Veuillez saisir un mot de passe';
+                              }
+                              if (value.length < 6) {
+                                return 'Au moins 6 caractères';
+                              }
+                              return null;
+                            },
                           ),
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Veuillez confirmer le mot de passe';
-                            }
-                            if (value != _passwordController.text) {
-                              return 'Les mots de passe ne correspondent pas';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 28),
+                          const SizedBox(height: 16),
 
-                        // ----- Bouton -----
-                        FilledButton(
-                          onPressed: _loading ? null : _register,
-                          style: FilledButton.styleFrom(
-                            minimumSize: const Size.fromHeight(54),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            textStyle: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          child: _loading
-                              ? const SizedBox(
-                                  height: 24,
-                                  width: 24,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.5,
-                                  ),
-                                )
-                              : const Text('Créer mon compte'),
-                        ),
-                        const SizedBox(height: 24),
-
-                        // ----- Lien vers la connexion -----
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              'Vous avez déjà un compte ?',
-                              style: TextStyle(color: colors.onSurfaceVariant),
-                            ),
-                            TextButton(
-                              onPressed: () => Navigator.pop(context),
-                              child: const Text(
-                                'Se connecter',
-                                style: TextStyle(fontWeight: FontWeight.bold),
+                          // ----- Confirmation du mot de passe -----
+                          TextFormField(
+                            controller: _confirmController,
+                            obscureText: _obscureConfirm,
+                            textInputAction: TextInputAction.done,
+                            onFieldSubmitted: (_) => _register(),
+                            decoration: authDecoration(
+                              context,
+                              label: 'Confirmer le mot de passe',
+                              icon: Icons.lock_reset_outlined,
+                              suffix: IconButton(
+                                tooltip: _obscureConfirm
+                                    ? 'Afficher le mot de passe'
+                                    : 'Masquer le mot de passe',
+                                icon: Icon(
+                                  _obscureConfirm
+                                      ? Icons.visibility_outlined
+                                      : Icons.visibility_off_outlined,
+                                ),
+                                onPressed: () => setState(
+                                  () => _obscureConfirm = !_obscureConfirm,
+                                ),
                               ),
                             ),
-                          ],
-                        ),
-                      ],
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Veuillez confirmer le mot de passe';
+                              }
+                              if (value != _passwordController.text) {
+                                return 'Les mots de passe ne correspondent pas';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 28),
+
+                          // ----- Bouton créer le compte -----
+                          FilledButton(
+                            onPressed: _loading ? null : _register,
+                            style: FilledButton.styleFrom(
+                              minimumSize: const Size.fromHeight(54),
+                              backgroundColor: AppColors.orangePrimary,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              textStyle: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            child: _loading
+                                ? const SizedBox(
+                                    height: 24,
+                                    width: 24,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.5,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text('Créer mon compte'),
+                          ),
+                          const SizedBox(height: 24),
+
+                          // ----- Lien vers la connexion -----
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'Vous avez déjà un compte ?',
+                                style: TextStyle(color: AppColors.textSecondary),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.pop(context),
+                                child: const Text(
+                                  'Se connecter',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
