@@ -12,11 +12,11 @@ class CategoryChips extends StatelessWidget {
   final bool searching;
 
   const CategoryChips({
-    Key? key,
+    super.key,
     required this.selectedIndex,
     required this.onSelect,
     required this.searching,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

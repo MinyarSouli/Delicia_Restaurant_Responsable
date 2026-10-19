@@ -39,10 +39,10 @@ class AppTheme {
         onPrimary: Colors.white,
         secondary: AppColors.orangeDark,
         onSecondary: Colors.white,
-        background: AppColors.peachTop,
-        onBackground: AppColors.textBrown,
-        surface: AppColors.cardCream, // fond de carte = crème
-        onSurface: AppColors.textBrown,
+        // background/onBackground supprimés (dépréciés depuis Flutter 3.18)
+        // → on utilise surface/onSurface pour le fond principal
+        surface: AppColors.peachTop,    // fond pêche comme surface principale
+        onSurface: AppColors.textBrown, // texte brun sur fond pêche
         error: AppColors.error,
         onError: Colors.white,
       ),

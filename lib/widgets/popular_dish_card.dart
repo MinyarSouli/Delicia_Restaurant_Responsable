@@ -11,10 +11,10 @@ class PopularDishCard extends StatelessWidget {
   final VoidCallback onQuickAdd;
 
   const PopularDishCard({
-    Key? key,
+    super.key,
     required this.dish,
     required this.onQuickAdd,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

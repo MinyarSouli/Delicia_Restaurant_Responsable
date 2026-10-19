@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 
-import '../models/app_user.dart';
 import '../services/auth_service.dart';
+import '../services/navigation_service.dart';
 import '../widgets/auth_widgets.dart';
 import '../theme/app_colors.dart';
-import 'register_page.dart';
+import 'main_shell.dart';
 
-/// Page de connexion.
-/// Retourne un [AppUser] à l'écran précédent quand la connexion réussit.
-/// Aucune logique (AuthService, validations, navigation) n'est modifiée.
+/// Page de connexion du responsable (admin).
+/// Seuls les comptes avec role == 'admin' sont acceptés (voir AuthService).
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -36,27 +35,27 @@ class _LoginPageState extends State<LoginPage> {
 
     setState(() => _loading = true);
     try {
-      final user = await AuthService.instance.login(
+      await AuthService.instance.login(
         email: _emailController.text,
         password: _passwordController.text,
       );
       if (!mounted) return;
-      Navigator.pop(context, user); // renvoie l'utilisateur connecté
+
+      // On repart toujours sur l'onglet Menu après connexion
+      NavigationService.instance.switchToTab(0);
+
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const MainShell()),
+      );
     } on AuthException catch (e) {
       if (!mounted) return;
       _showError(e.message);
+    } catch (_) {
+      if (!mounted) return;
+      _showError('Une erreur est survenue. Veuillez réessayer.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
-  }
-
-  Future<void> _goToRegister() async {
-    final user = await Navigator.push<AppUser>(
-      context,
-      MaterialPageRoute(builder: (_) => const RegisterPage()),
-    );
-    // Si le compte a été créé, on renvoie directement l'utilisateur
-    if (user != null && mounted) Navigator.pop(context, user);
   }
 
   void _showError(String message) {
@@ -72,10 +71,10 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // Pas de couleur sur le Scaffold lui-même : le fond est géré par le Container
       backgroundColor: Colors.transparent,
       body: Container(
-        // Dégradé pêche sur tout l'écran (même ambiance que le menu)
+        width: double.infinity,
+        height: double.infinity,
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
@@ -86,14 +85,11 @@ class _LoginPageState extends State<LoginPage> {
         child: SingleChildScrollView(
           child: Column(
             children: [
-              // Bandeau orange avec logo Délicia, titre et sous-titre
               const AuthHeader(
-                title: 'Bon retour !',
-                subtitle: 'Connectez-vous pour confirmer votre commande',
-                showBack: true,
+                title: 'Espace responsable',
+                subtitle: 'Connectez-vous pour gérer le menu',
+                showBack: false, // écran racine : pas de retour
               ),
-
-              // Corps du formulaire centré, largeur max 480 px
               Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 480),
@@ -115,7 +111,7 @@ class _LoginPageState extends State<LoginPage> {
                             decoration: authDecoration(
                               context,
                               label: 'Adresse e-mail',
-                              hint: 'exemple@mail.com',
+                              hint: 'admin@mail.com',
                               icon: Icons.email_outlined,
                             ),
                             validator: (value) {
@@ -190,25 +186,6 @@ class _LoginPageState extends State<LoginPage> {
                                     ),
                                   )
                                 : const Text('Se connecter'),
-                          ),
-                          const SizedBox(height: 24),
-
-                          // ----- Lien vers l'inscription -----
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                'Pas encore de compte ?',
-                                style: TextStyle(color: AppColors.textSecondary),
-                              ),
-                              TextButton(
-                                onPressed: _goToRegister,
-                                child: const Text(
-                                  'Créer un compte',
-                                  style: TextStyle(fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                            ],
                           ),
                         ],
                       ),

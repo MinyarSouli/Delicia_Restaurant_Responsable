@@ -13,11 +13,11 @@ class DishCard extends StatelessWidget {
   final VoidCallback onQuickAdd;
 
   const DishCard({
-    Key? key,
+    super.key,
     required this.dish,
     required this.onTap,
     required this.onQuickAdd,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

@@ -19,7 +19,7 @@ import '../theme/app_colors.dart';
 class CartPage extends StatelessWidget {
   final bool isTab;
 
-  const CartPage({Key? key, this.isTab = false}) : super(key: key);
+  const CartPage({super.key, this.isTab = false});
 
   @override
   Widget build(BuildContext context) {

@@ -10,7 +10,7 @@ import '../theme/app_colors.dart';
 class CartBadgeButton extends StatelessWidget {
   final VoidCallback? onTap;
 
-  const CartBadgeButton({Key? key, this.onTap}) : super(key: key);
+  const CartBadgeButton({super.key, this.onTap});
 
   @override
   Widget build(BuildContext context) {

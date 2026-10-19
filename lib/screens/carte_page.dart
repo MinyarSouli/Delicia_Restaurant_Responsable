@@ -1,19 +1,28 @@
+// lib/screens/carte_page.dart
+// ─────────────────────────────────────────────────────────────────────────────
+// Page Gestion du Menu (côté Admin) — CRUD complet connecté à Firebase.
+//
+// Architecture de la mise à jour en temps réel :
+//   StreamBuilder<List<Dish>>
+//     └─ DishService.instance.watchDishes()   ← Stream Firestore (onSnapshot)
+//          └─ _col.orderBy('name').snapshots() ← écoute TOUTES les modifs
+//
+// Quand l'admin (ou un autre appareil) ajoute / modifie / supprime un plat
+// dans Firestore, le StreamBuilder reçoit automatiquement la nouvelle liste
+// et reconstruit l'interface — SANS rafraîchissement manuel.
+// ─────────────────────────────────────────────────────────────────────────────
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../data/menu_data.dart';
 import '../models/dish.dart';
-import '../services/cart_service.dart';
-import '../services/navigation_service.dart';
-import '../widgets/dish_image.dart';
-import 'dish_detail_page.dart';
-import '../widgets/dish_card.dart';
-import '../widgets/popular_dish_card.dart';
-import '../widgets/cart_badge_button.dart';
-import '../widgets/category_chips.dart';
+import '../services/dish_service.dart';
 import '../theme/app_colors.dart';
+import '../widgets/admin_dish_card.dart';
+import '../widgets/category_chips.dart';
+import 'dish_form_page.dart';
 
-/// Page principale : consultation du menu par catégories.
+/// Page menu côté admin : même design que le client + CRUD.
 class CartePage extends StatefulWidget {
   const CartePage({super.key});
 
@@ -22,91 +31,125 @@ class CartePage extends StatefulWidget {
 }
 
 class _CartePageState extends State<CartePage> {
+  // ── État local (recherche + filtre catégorie) ────────────────────────────
   final _searchController = TextEditingController();
   int _selectedCategory = 0;
   String _query = '';
 
+  // ── dispose ────────────────────────────────────────────────────────────────
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
   }
 
-  /// Plats à afficher : résultats de la recherche, sinon la catégorie choisie.
-  List<Dish> get _visibleDishes {
+  // ─────────────────────────────────────────────────────────────────────────
+  // _filter() – Filtre la liste complète selon la recherche / catégorie
+  // ─────────────────────────────────────────────────────────────────────────
+  List<Dish> _filter(List<Dish> all) {
     final q = _query.trim().toLowerCase();
+
+    // Si l'utilisateur a tapé quelque chose dans la barre de recherche
     if (q.isNotEmpty) {
-      return menuDishes
-          .where(
-            (d) =>
-                d.name.toLowerCase().contains(q) ||
-                d.description.toLowerCase().contains(q),
-          )
+      return all
+          .where((d) =>
+              d.name.toLowerCase().contains(q) ||
+              d.description.toLowerCase().contains(q))
           .toList();
     }
+
+    // Sinon, filtre par catégorie sélectionnée
     final category = menuCategories[_selectedCategory].name;
-    return menuDishes.where((d) => d.category == category).toList();
+    return all.where((d) => d.category == category).toList();
   }
 
-  /// Liste des plats populaires (isPopular == true).
-  List<Dish> get _popularDishes =>
-      menuDishes.where((d) => d.isPopular).toList();
+  // ─────────────────────────────────────────────────────────────────────────
+  // Navigation vers le formulaire d'ajout / modification
+  // ─────────────────────────────────────────────────────────────────────────
+  /// Ouvre [DishFormPage] en mode AJOUT (dish == null) ou MODIFICATION.
+  void _openForm([Dish? dish]) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => DishFormPage(dish: dish)),
+    );
+  }
 
-  /// Affiche un SnackBar flottant « <nom> ajouté au panier »
-  /// avec le bouton d'action « Voir le panier ».
-  void _showAdded(String dishName) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
+  // ─────────────────────────────────────────────────────────────────────────
+  // _confirmDelete() – Confirme puis supprime un plat dans Firestore
+  // ─────────────────────────────────────────────────────────────────────────
+  Future<void> _confirmDelete(Dish dish) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Supprimer ce plat ?'),
+        content: Text('« ${dish.name} » sera supprimé définitivement.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Annuler')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Supprimer',
+                  style: TextStyle(color: AppColors.error))),
+        ],
+      ),
+    );
+
+    if (ok == true) {
+      // ── SUPPRESSION FIREBASE ─────────────────────────────────────────────
+      // DishService.delete() appelle _col.doc(id).delete() dans Firestore.
+      // Le StreamBuilder de watchDishes() reçoit aussitôt la mise à jour
+      // et retire la carte du plat de l'interface automatiquement.
+      await DishService.instance.delete(dish.id);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            '$dishName ajouté au panier',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+          content: Text('${dish.name} supprimé'),
           behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 90), // reste au-dessus du footer
-          duration: const Duration(seconds: 2),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          action: SnackBarAction(
-            label: 'Voir le panier',
-            textColor: Colors.white,
-            onPressed: () {
-              // Bascule directement sur l'onglet Panier de MainShell
-              NavigationService.instance.openCart();
-            },
-          ),
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 90),
         ),
       );
+    }
   }
 
-  /// Ouvre la page de détail du plat.
-  /// Si le retour indique qu'un plat a été ajouté, affiche le SnackBar.
-  Future<void> _openDetail(Dish dish) async {
-    final added = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(builder: (_) => DishDetailPage(dish: dish)),
-    );
-    if (added == true && mounted) _showAdded(dish.name);
+  // ─────────────────────────────────────────────────────────────────────────
+  // _seed() – Import initial du menu depuis menu_data.dart vers Firestore
+  // ─────────────────────────────────────────────────────────────────────────
+  /// Importe les plats de menu_data.dart dans Firestore SI la collection
+  /// est vide. Bouton visible uniquement quand all.isEmpty.
+  Future<void> _seed() async {
+    final n = await DishService.instance.seedIfEmpty(menuDishes);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(n == 0
+          ? 'Le menu Firestore contient déjà des plats.'
+          : '$n plats importés dans Firestore.'),
+      behavior: SnackBarBehavior.floating,
+    ));
   }
 
-  /// Ajoute le plat au panier directement (sans ouvrir le détail).
-  void _quickAdd(Dish dish) {
-    CartService.instance.add(dish);
-    _showAdded(dish.name);
-  }
-
+  // ─────────────────────────────────────────────────────────────────────────
+  // build() – Interface principale avec StreamBuilder (temps réel)
+  // ─────────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final dishes = _visibleDishes;
     final searching = _query.trim().isNotEmpty;
-    final popularDishes = _popularDishes;
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
+      // ── Bouton flottant : Ajouter un plat ─────────────────────────────────
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: FloatingActionButton.extended(
+          onPressed: () => _openForm(),
+          backgroundColor: AppColors.orangePrimary,
+          foregroundColor: Colors.white,
+          icon: const Icon(Icons.add),
+          label: const Text('Ajouter un plat'),
+        ),
+      ),
       body: Container(
         width: double.infinity,
         height: double.infinity,
@@ -119,13 +162,37 @@ class _CartePageState extends State<CartePage> {
         ),
         child: SafeArea(
           bottom: false,
-          child: Stack(
-            children: [
-              CustomScrollView(
+          // ════════════════════════════════════════════════════════════════
+          // StreamBuilder : écoute la collection "dishes" en TEMPS RÉEL.
+          //
+          // À chaque changement dans Firestore (ajout/modif/suppression),
+          // snapshot reçoit automatiquement la nouvelle liste et Flutter
+          // reconstruit le widget → affichage instantané, 0 rafraîchissement.
+          //
+          // C'est l'équivalent Flutter de :  firestore.collection('dishes')
+          //                                            .onSnapshot(callback)
+          // ════════════════════════════════════════════════════════════════
+          child: StreamBuilder<List<Dish>>(
+            stream: DishService.instance.watchDishes(),
+            builder: (context, snap) {
+              // ── États du Stream ──────────────────────────────────────────
+              if (snap.hasError) {
+                return Center(child: Text('Erreur : ${snap.error}'));
+              }
+              if (!snap.hasData) {
+                // Chargement initial : indicateur de progression
+                return const Center(
+                    child: CircularProgressIndicator(
+                        color: AppColors.orangePrimary));
+              }
+
+              // snap.data! contient la liste complète et à jour
+              final all = snap.data!;
+              final dishes = _filter(all); // applique recherche / catégorie
+
+              return CustomScrollView(
                 slivers: [
-                  // =========================================================
-                  // EN-TÊTE : Logo "Délicia" + CartBadgeButton + Barre de recherche
-                  // =========================================================
+                  // ── En-tête : logo + bouton import ──────────────────────
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
@@ -133,65 +200,71 @@ class _CartePageState extends State<CartePage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
-                              Text(
-                                'Délicia',
-                                style: GoogleFonts.pacifico(
-                                  fontSize: 30,
-                                  color: AppColors.orangePrimary,
-                                  height: 1.1,
+                              Text('Délicia',
+                                  style: GoogleFonts.pacifico(
+                                      fontSize: 30,
+                                      color: AppColors.orangePrimary,
+                                      height: 1.1)),
+                              const SizedBox(width: 10),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: AppColors.orangeDark,
+                                  borderRadius: BorderRadius.circular(20),
                                 ),
+                                child: const Text('Admin',
+                                    style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold)),
                               ),
                               const Spacer(),
-                              CartBadgeButton(
-                                onTap: () => NavigationService.instance.openCart(),
-                              ),
+                              // Bouton import visible uniquement si vide
+                              if (all.isEmpty)
+                                TextButton.icon(
+                                  onPressed: _seed,
+                                  icon: const Icon(
+                                      Icons.cloud_upload_outlined),
+                                  label: const Text('Importer le menu'),
+                                ),
                             ],
                           ),
-
                           const SizedBox(height: 20),
 
-                          // ----- Barre de recherche -----
+                          // ── Barre de recherche ───────────────────────────
                           TextField(
                             controller: _searchController,
-                            onChanged: (value) => setState(() => _query = value),
-                            textInputAction: TextInputAction.search,
+                            onChanged: (v) =>
+                                setState(() => _query = v),
                             decoration: InputDecoration(
                               hintText: 'Rechercher un plat...',
-                              prefixIcon: const Icon(
-                                Icons.search,
-                                color: AppColors.textSecondary,
-                              ),
+                              prefixIcon: const Icon(Icons.search,
+                                  color: AppColors.textSecondary),
                               suffixIcon: searching
                                   ? IconButton(
-                                      tooltip: 'Effacer',
                                       icon: const Icon(Icons.close),
                                       onPressed: () {
                                         _searchController.clear();
                                         setState(() => _query = '');
-                                      },
-                                    )
+                                      })
                                   : null,
                               filled: true,
                               fillColor: AppColors.cardCream,
-                              contentPadding:
-                                  const EdgeInsets.symmetric(vertical: 14),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  vertical: 14),
                               border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                borderSide: BorderSide.none,
-                              ),
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: BorderSide.none),
                               enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                borderSide: BorderSide.none,
-                              ),
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: BorderSide.none),
                               focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                borderSide: const BorderSide(
-                                  color: AppColors.orangePrimary,
-                                  width: 1.5,
-                                ),
-                              ),
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: const BorderSide(
+                                      color: AppColors.orangePrimary,
+                                      width: 1.5)),
                             ),
                           ),
                         ],
@@ -199,34 +272,17 @@ class _CartePageState extends State<CartePage> {
                     ),
                   ),
 
-                  // =========================================================
-                  // BANNIÈRE "PLAT DU JOUR"
-                  // =========================================================
-                  if (!searching && popularDishes.isNotEmpty)
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                        child: _PlatDuJourBanner(
-                          dish: popularDishes.first,
-                          onTap: () => _openDetail(popularDishes.first),
-                          onCommander: () => _quickAdd(popularDishes.first),
-                        ),
-                      ),
-                    ),
-
-                  // =========================================================
-                  // PASTILLES DE CATÉGORIES
-                  // =========================================================
+                  // ── Filtres catégories ───────────────────────────────────
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.only(top: 20),
                       child: CategoryChips(
                         selectedIndex: _selectedCategory,
-                        onSelect: (index) {
+                        onSelect: (i) {
                           _searchController.clear();
                           setState(() {
                             _query = '';
-                            _selectedCategory = index;
+                            _selectedCategory = i;
                           });
                         },
                         searching: searching,
@@ -234,50 +290,7 @@ class _CartePageState extends State<CartePage> {
                     ),
                   ),
 
-                  // =========================================================
-                  // SECTION POPULAIRES avec titre
-                  // ListView horizontale avec padding vertical de 12 px et clipBehavior: Clip.none
-                  // pour éviter de couper les ombres
-                  // =========================================================
-                  if (!searching && popularDishes.isNotEmpty) ...[
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
-                        child: Text(
-                          'Populaires',
-                          style: textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textBrown,
-                          ),
-                        ),
-                      ),
-                    ),
-                    SliverToBoxAdapter(
-                      child: SizedBox(
-                        height: 205, // Hauteur généreuse pour accueillir les ombres
-                        child: ListView.builder(
-                          clipBehavior: Clip.none, // Ne coupe pas l'ombre
-                          scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                          itemCount: popularDishes.length,
-                          itemBuilder: (context, index) {
-                            final popular = popularDishes[index];
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 14),
-                              child: PopularDishCard(
-                                dish: popular,
-                                onQuickAdd: () => _quickAdd(popular),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                  ],
-
-                  // =========================================================
-                  // TITRE DE SECTION
-                  // =========================================================
+                  // ── Titre de section + compteur ──────────────────────────
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
@@ -291,47 +304,36 @@ class _CartePageState extends State<CartePage> {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.textBrown,
-                              ),
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textBrown),
                             ),
                           ),
                           Text(
                             '${dishes.length} plat${dishes.length > 1 ? 's' : ''}',
-                            style: textTheme.bodyMedium?.copyWith(
-                              color: AppColors.textSecondary,
-                            ),
+                            style: textTheme.bodyMedium
+                                ?.copyWith(color: AppColors.textSecondary),
                           ),
                         ],
                       ),
                     ),
                   ),
 
-                  // =========================================================
-                  // GRILLE DES PLATS
-                  // SliverGridDelegateWithMaxCrossAxisExtent avec maxCrossAxisExtent: 220
-                  // et mainAxisExtent: 300 pour garantir une hauteur fixe et zéro overflow !
-                  // =========================================================
+                  // ── Grille des plats (ou message "aucun plat") ───────────
                   if (dishes.isEmpty)
-                    SliverFillRemaining(
+                    const SliverFillRemaining(
                       hasScrollBody: false,
                       child: Center(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(
-                              Icons.search_off,
-                              size: 56,
-                              color: AppColors.textSecondary,
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              'Aucun plat trouvé',
-                              style: TextStyle(
-                                color: AppColors.textSecondary,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
+                            Icon(Icons.search_off,
+                                size: 56,
+                                color: AppColors.textSecondary),
+                            SizedBox(height: 12),
+                            Text('Aucun plat trouvé',
+                                style: TextStyle(
+                                    color: AppColors.textSecondary,
+                                    fontWeight: FontWeight.w600)),
                           ],
                         ),
                       ),
@@ -345,229 +347,22 @@ class _CartePageState extends State<CartePage> {
                           maxCrossAxisExtent: 220,
                           mainAxisSpacing: 16,
                           crossAxisSpacing: 16,
-                          mainAxisExtent: 300, // Hauteur FIXE : supprime tout overflow
+                          mainAxisExtent: 300,
                         ),
                         itemCount: dishes.length,
-                        itemBuilder: (context, index) {
-                          final dish = dishes[index];
-                          return DishCard(
+                        itemBuilder: (context, i) {
+                          final dish = dishes[i];
+                          return AdminDishCard(
                             dish: dish,
-                            onTap: () => _openDetail(dish),
-                            onQuickAdd: () => _quickAdd(dish),
+                            onEdit: () => _openForm(dish),
+                            onDelete: () => _confirmDelete(dish),
                           );
                         },
                       ),
                     ),
                 ],
-              ),
-
-              // =========================================================
-              // BARRE FLOTTANTE "Commander" (au-dessus du contenu)
-              // =========================================================
-              Positioned(
-                left: 20,
-                right: 20,
-                bottom: 16,
-                child: ListenableBuilder(
-                  listenable: CartService.instance,
-                  builder: (context, _) {
-                    final cart = CartService.instance;
-                    if (cart.itemCount == 0) return const SizedBox.shrink();
-
-                    return Material(
-                      color: colors.primary,
-                      elevation: 8,
-                      borderRadius: BorderRadius.circular(20),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(20),
-                        onTap: () {
-                          NavigationService.instance.openCart();
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 14,
-                          ),
-                          child: Row(
-                            children: [
-                              CircleAvatar(
-                                radius: 16,
-                                backgroundColor: colors.onPrimary,
-                                child: Text(
-                                  '${cart.itemCount}',
-                                  style: TextStyle(
-                                    color: colors.primary,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  'Commander',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: colors.onPrimary,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                              Text(
-                                formatPrice(cart.totalWithVat),
-                                style: TextStyle(
-                                  color: colors.onPrimary,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// =====================================================================
-// WIDGET INTERNE : Bannière "Plat du jour"
-// =====================================================================
-class _PlatDuJourBanner extends StatelessWidget {
-  final Dish dish;
-  final VoidCallback onTap;
-  final VoidCallback onCommander;
-
-  const _PlatDuJourBanner({
-    required this.dish,
-    required this.onTap,
-    required this.onCommander,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 200,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(28),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF3A2216).withValues(alpha: 0.15),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(28),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              DishImage(path: dish.image),
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Colors.black.withValues(alpha: 0.65),
-                    ],
-                    stops: const [0.35, 1.0],
-                  ),
-                ),
-              ),
-              Positioned(
-                left: 16,
-                right: 16,
-                bottom: 16,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color:
-                                  AppColors.orangePrimary.withValues(alpha: 0.9),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: const Text(
-                              'Plat du jour',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            dish.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: textTheme.titleMedium?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            formatPrice(dish.price),
-                            style: textTheme.bodyMedium?.copyWith(
-                              color: const Color(0xFFFFCB8E),
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    GestureDetector(
-                      onTap: onCommander,
-                      behavior: HitTestBehavior.opaque,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.orangePrimary,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: const Text(
-                          'Commander',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+              );
+            },
           ),
         ),
       ),

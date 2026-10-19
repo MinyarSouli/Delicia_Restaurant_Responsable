@@ -1,12 +1,13 @@
 name: restaurant_client
 description: "A new Flutter project."
 # Ce fichier gère toutes les dépendances du projet.
-publish_to: 'none'
+publish_to: "none"
 
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.13.4
+  sdk: ">=3.0.0 <4.0.0"
+  flutter: ">=3.0.0"
 
 dependencies:
   flutter:

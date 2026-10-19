@@ -1,27 +1,48 @@
-import 'dish.dart';
+// lib/models/cart_item.dart
+// ─────────────────────────────────────────────────────────────────────────────
+// Modèle représentant un article dans le panier.
+//
+// Un CartItem encapsule :
+//   • le [dish]        → le plat de base
+//   • [supplements]    → les suppléments choisis par le client
+//   • [quantity]       → nombre d'exemplaires commandés
+//
+// [key] est une clé unique dérivée du plat + des suppléments, permettant
+// d'identifier un article de façon unique même si le même plat est commandé
+// avec des suppléments différents.
+// ─────────────────────────────────────────────────────────────────────────────
+import '../models/dish.dart';
 
-/// Une ligne du panier : un plat, sa quantité et ses suppléments choisis.
 class CartItem {
   final Dish dish;
-  int quantity;
   final List<Supplement> supplements;
+  final int quantity;
 
-  CartItem({
+  const CartItem({
     required this.dish,
-    this.quantity = 1,
-    this.supplements = const [],
+    required this.supplements,
+    required this.quantity,
   });
 
-  /// Prix d'une unité : plat + suppléments.
-  double get unitPrice =>
-      dish.price + supplements.fold<double>(0, (sum, s) => sum + s.price);
-
-  /// Prix de la ligne : prix unitaire x quantité.
-  double get total => unitPrice * quantity;
-
-  /// Identifiant de la ligne : même plat + mêmes suppléments = même ligne.
+  /// Clé unique : id du plat + noms des suppléments triés.
+  /// Permet de différencier le même plat avec des options différentes.
   String get key {
-    final names = supplements.map((s) => s.name).toList()..sort();
-    return '${dish.id}|${names.join(',')}';
+    final suppNames = supplements.map((s) => s.name).toList()..sort();
+    return '${dish.id}_${suppNames.join(',')}';
+  }
+
+  /// Prix total de la ligne = (prix plat + prix suppléments) × quantité.
+  double get total {
+    final suppTotal = supplements.fold(0.0, (sum, s) => sum + s.price);
+    return (dish.price + suppTotal) * quantity;
+  }
+
+  /// Crée une copie avec une nouvelle quantité.
+  CartItem copyWith({int? quantity, List<Supplement>? supplements}) {
+    return CartItem(
+      dish: dish,
+      supplements: supplements ?? this.supplements,
+      quantity: quantity ?? this.quantity,
+    );
   }
 }

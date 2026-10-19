@@ -1,8 +1,9 @@
-// lib/services/auth_service.dart
+// lib/services/auth_service.dart  (VERSION ADMIN — identifiants fixes)
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/app_user.dart';
+import '../config/app_config.dart'; // adminEmail, adminPassword, adminName
 
 // ─────────────────────────────────────────────────────────
 // Erreur d'authentification avec un message lisible (en français)
@@ -16,12 +17,17 @@ class AuthException implements Exception {
 }
 
 // ─────────────────────────────────────────────────────────
-// Service d'authentification — Firebase Auth + Firestore
+// Service d'authentification admin — Firebase Auth + Firestore
 // ─────────────────────────────────────────────────────────
 
-/// Gère l'inscription, la connexion et la déconnexion via Firebase.
+/// Gère la connexion et la déconnexion du responsable (admin).
 ///
-/// Usage depuis n'importe quel écran :
+/// L'administrateur est identifié par son e-mail fixe [adminEmail]
+/// défini dans [app_config.dart].  Il n'existe pas de page d'inscription :
+/// le compte est créé automatiquement dans Firebase Auth au premier
+/// lancement (via [_ensureAdminAccountExists]).
+///
+/// Usage :
 ///   AuthService.instance.login(email: ..., password: ...)
 ///   AuthService.instance.currentUser  // AppUser? synchrone
 ///   AuthService.instance.logout()
@@ -35,102 +41,133 @@ class AuthService {
   final _firestore = FirebaseFirestore.instance;
 
   // ── Utilisateur courant (lecture synchrone) ────────────
-  /// Le client connecté, ou null si personne n'est connecté.
-  /// Cette valeur est mise à jour automatiquement par [_listenToAuthChanges].
+  /// L'admin connecté, ou null si personne n'est connecté.
   AppUser? currentUser;
 
   // ─────────────────────────────────────────────────────────
-  // Initialisation : écoute l'état Firebase dès le démarrage
+  // Initialisation
   // ─────────────────────────────────────────────────────────
 
   /// À appeler une seule fois dans main(), juste avant runApp().
-  /// Attend le premier événement d'authentification (connecté ou non)
-  /// pour que [currentUser] soit déjà renseigné quand l'interface s'affiche.
   Future<void> init() async {
+    // S'assure que le compte admin existe dans Firebase Auth
+    await _ensureAdminAccountExists();
+
     // Attend que Firebase nous dise si une session existe déjà
     final firebaseUser = await _auth.authStateChanges().first;
 
     if (firebaseUser != null) {
-      // Une session Firebase est active : on charge le profil Firestore
-      currentUser = await _buildAppUser(firebaseUser);
+      currentUser = await _buildAdminOrSignOut(firebaseUser);
     }
 
     // Écoute les changements futurs (connexion / déconnexion)
     _auth.authStateChanges().listen((firebaseUser) async {
       if (firebaseUser == null) {
-        currentUser = null; // déconnexion
+        currentUser = null;
       } else {
-        currentUser = await _buildAppUser(firebaseUser);
+        currentUser = await _buildAdminOrSignOut(firebaseUser);
       }
     });
   }
 
   // ─────────────────────────────────────────────────────────
-  // Inscription
+  // Création automatique du compte admin (premier lancement)
   // ─────────────────────────────────────────────────────────
 
-  /// Crée un nouveau compte :
-  /// 1. Firebase Auth (e-mail + mot de passe)
-  /// 2. Met à jour le displayName dans Firebase Auth
-  /// 3. Écrit le document users/{uid} dans Firestore
-  Future<AppUser> register({
-    required String name,
-    required String email,
-    required String password,
-  }) async {
+  /// Crée le compte admin dans Firebase Auth si il n'existe pas encore,
+  /// puis enregistre (ou met à jour) son document Firestore avec role='admin'.
+  Future<void> _ensureAdminAccountExists() async {
     try {
-      // 1. Création du compte dans Firebase Auth
-      final credential = await _auth.createUserWithEmailAndPassword(
-        email: email.trim(),
-        password: password,
+      // Tentative de connexion silencieuse pour vérifier l'existence du compte
+      final credential = await _auth.signInWithEmailAndPassword(
+        email: adminEmail,
+        password: adminPassword,
       );
-      final firebaseUser = credential.user!;
 
-      // 2. Mise à jour du nom dans Firebase Auth
-      await firebaseUser.updateDisplayName(name.trim());
+      // Le compte existe — s'assurer que Firestore est à jour
+      await _upsertAdminDoc(credential.user!.uid);
 
-      // 3. Écriture du profil dans Firestore
-      // Le rôle est TOUJOURS 'client' : le client ne peut pas se l'attribuer lui-même.
-      await _firestore.collection('users').doc(firebaseUser.uid).set({
-        'fullName': name.trim(),
-        'email': email.trim().toLowerCase(),
-        'role': 'client',
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      // On construit le AppUser local
-      currentUser = AppUser(
-        id: firebaseUser.uid,
-        name: name.trim(),
-        email: email.trim().toLowerCase(),
-      );
-      return currentUser!;
+      // Déconnexion immédiate (l'init ne doit pas garder de session ouverte)
+      await _auth.signOut();
     } on FirebaseAuthException catch (e) {
-      // On traduit l'erreur Firebase en français
-      throw AuthException(_traduire(e.code));
+      if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
+        // Le compte n'existe pas encore → on le crée
+        try {
+          final credential = await _auth.createUserWithEmailAndPassword(
+            email: adminEmail,
+            password: adminPassword,
+          );
+
+          // Met à jour le displayName dans Firebase Auth
+          await credential.user!.updateDisplayName(adminName);
+
+          // Crée le document Firestore avec role='admin'
+          await _upsertAdminDoc(credential.user!.uid);
+
+          // Déconnexion immédiate
+          await _auth.signOut();
+        } catch (_) {
+          // Échec silencieux — la connexion montrera une erreur appropriée
+        }
+      }
+      // Autres codes d'erreur (réseau, etc.) : on ignore silencieusement
+    } catch (_) {
+      // Erreur inattendue : on ignore silencieusement
+    }
+  }
+
+  /// Crée ou met à jour le document `users/{uid}` dans Firestore
+  /// avec les informations de l'admin (role='admin').
+  Future<void> _upsertAdminDoc(String uid) async {
+    try {
+      await _firestore.collection('users').doc(uid).set({
+        'fullName': adminName,
+        'email': adminEmail,
+        'role': 'admin',
+        'createdAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (_) {
+      // Erreur Firestore (permissions, réseau) : on ignore
     }
   }
 
   // ─────────────────────────────────────────────────────────
-  // Connexion
+  // Connexion (admin uniquement)
   // ─────────────────────────────────────────────────────────
 
-  /// Connecte un compte existant et charge son profil depuis Firestore.
+  /// Connecte l'admin. Si l'e-mail ne correspond pas au compte admin fixe,
+  /// on rejette la connexion immédiatement.
   Future<AppUser> login({
     required String email,
     required String password,
   }) async {
+    // Vérification préalable : seul l'email admin est autorisé
+    if (email.trim().toLowerCase() != adminEmail.toLowerCase()) {
+      throw const AuthException(
+        'Accès refusé : ce compte n\'est pas administrateur.',
+      );
+    }
+
     try {
-      // Connexion via Firebase Auth
       final credential = await _auth.signInWithEmailAndPassword(
         email: email.trim(),
         password: password,
       );
       final firebaseUser = credential.user!;
 
-      // Lecture du profil dans Firestore pour récupérer le nom complet
-      currentUser = await _buildAppUser(firebaseUser);
-      return currentUser!;
+      // Construction de l'AppUser admin (sans vérification Firestore bloquante)
+      final admin = AppUser(
+        id: firebaseUser.uid,
+        name: firebaseUser.displayName ?? adminName,
+        email: firebaseUser.email ?? adminEmail,
+      );
+
+      currentUser = admin;
+
+      // Mise à jour Firestore en arrière-plan (non bloquante)
+      _upsertAdminDoc(firebaseUser.uid);
+
+      return admin;
     } on FirebaseAuthException catch (e) {
       throw AuthException(_traduire(e.code));
     }
@@ -150,12 +187,25 @@ class AuthService {
   // Méthodes privées
   // ─────────────────────────────────────────────────────────
 
-  /// Construit un [AppUser] à partir de l'utilisateur Firebase.
-  /// Lit d'abord Firestore pour avoir le nom complet ;
-  /// si le document n'existe pas encore, utilise le displayName.
-  Future<AppUser> _buildAppUser(User firebaseUser) async {
+  /// Lit users/{uid} dans Firestore.
+  /// - Si role == 'admin' : renvoie un [AppUser].
+  /// - Si l'e-mail correspond à adminEmail : renvoie un [AppUser] sans
+  ///   dépendre de Firestore (fallback si Firestore est inaccessible).
+  /// - Sinon : déconnecte Firebase et renvoie null.
+  Future<AppUser?> _buildAdminOrSignOut(User firebaseUser) async {
+    // Fallback : si l'e-mail correspond à l'admin fixe, on accepte
+    if ((firebaseUser.email ?? '').toLowerCase() == adminEmail.toLowerCase()) {
+      return AppUser(
+        id: firebaseUser.uid,
+        name: firebaseUser.displayName ?? adminName,
+        email: firebaseUser.email ?? adminEmail,
+      );
+    }
+
+    // Vérification Firestore pour d'éventuels autres comptes
     String name = firebaseUser.displayName ?? '';
     String email = firebaseUser.email ?? '';
+    String? role;
 
     try {
       final doc = await _firestore
@@ -167,9 +217,16 @@ class AuthService {
         final data = doc.data()!;
         name = (data['fullName'] as String?) ?? name;
         email = (data['email'] as String?) ?? email;
+        role = data['role'] as String?;
       }
     } catch (_) {
-      // En cas d'erreur réseau, on utilise les données Firebase Auth
+      // Erreur réseau / permissions : on ne peut pas confirmer le rôle admin
+      role = null;
+    }
+
+    if (role != 'admin') {
+      await _auth.signOut();
+      return null;
     }
 
     return AppUser(
@@ -182,18 +239,16 @@ class AuthService {
   /// Traduit un code d'erreur FirebaseAuth en message français lisible.
   String _traduire(String code) {
     switch (code) {
-      case 'email-already-in-use':
-        return 'Un compte existe déjà avec cette adresse e-mail.';
       case 'invalid-email':
         return 'L\'adresse e-mail n\'est pas valide.';
-      case 'weak-password':
-        return 'Le mot de passe est trop court (6 caractères minimum).';
       case 'user-not-found':
         return 'Aucun compte trouvé avec cette adresse e-mail.';
       case 'wrong-password':
         return 'Mot de passe incorrect.';
       case 'invalid-credential':
         return 'E-mail ou mot de passe incorrect.';
+      case 'user-disabled':
+        return 'Ce compte a été désactivé.';
       case 'network-request-failed':
         return 'Impossible de se connecter au réseau. Vérifiez votre connexion.';
       case 'too-many-requests':

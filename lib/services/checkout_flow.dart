@@ -1,47 +1,95 @@
 // lib/services/checkout_flow.dart
+// ─────────────────────────────────────────────────────────────────────────────
+// Flux de validation de commande — identification du client.
+//
+// identifyCustomer(context) affiche une boîte de dialogue demandant
+// le numéro de table ou le nom du client, puis renvoie les informations
+// saisies sous forme de [CustomerInfo].
+//
+// Retourne null si l'utilisateur annule.
+// ─────────────────────────────────────────────────────────────────────────────
 import 'package:flutter/material.dart';
 
-import '../models/client_info.dart';
-import '../models/app_user.dart';
-import '../services/auth_service.dart';
+import '../theme/app_colors.dart';
 import '../widgets/table_number_dialog.dart';
-import '../screens/login_page.dart';
 
-/// Identifie le client avant la confirmation de la commande.
-/// Reprend exactement la logique de l'ancienne `_confirmOrder` de `CartePage`.
-/// Retourne un [CustomerInfo] si l'utilisateur a fourni son nom et le numéro de table,
-/// sinon retourne `null`.
+/// Informations d'identification du client lors du passage de commande.
+class CustomerInfo {
+  final String tableOrName;
+
+  const CustomerInfo({required this.tableOrName});
+}
+
+/// Affiche la boîte de dialogue d'identification et retourne [CustomerInfo]
+/// ou null si l'utilisateur annule.
 Future<CustomerInfo?> identifyCustomer(BuildContext context) async {
-  // Vérifier si l'utilisateur est déjà connecté.
-  AppUser? user = AuthService.instance.currentUser;
+  // Affiche le dialogue de saisie du numéro de table (retourne int? ou null)
+  final tableNumber = await showTableNumberDialog(context);
 
-  // Si aucun utilisateur connecté, ouvrir la page de connexion/register.
-  if (user == null) {
-    user = await Navigator.push<AppUser>(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginPage()),
-    );
-    if (user == null) return null; // L'utilisateur a abandonné la connexion.
-  }
+  if (tableNumber == null) return null;
 
-  // Demander le numéro de table.
-  final int? table = await showTableNumberDialog(context);
-  if (table == null) return null; // Abandon du dialogue.
+  return CustomerInfo(tableOrName: 'Table $tableNumber');
+}
 
-  // Créer les informations du client.
-  final info = CustomerInfo(fullName: user.name, tableNumber: table);
+/// Widget de dialogue de confirmation de commande (affiché après identifyCustomer).
+/// Peut être utilisé pour afficher un récapitulatif avant envoi final.
+class OrderConfirmationDialog extends StatelessWidget {
+  final CustomerInfo info;
+  final double total;
 
-  // Afficher un SnackBar de confirmation rapide.
-  if (context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '${info.fullName} - Table ${info.tableNumber} : informations validées',
+  const OrderConfirmationDialog({
+    super.key,
+    required this.info,
+    required this.total,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      backgroundColor: AppColors.cardCream,
+      title: const Text(
+        'Confirmer la commande',
+        style: TextStyle(
+          color: AppColors.textBrown,
+          fontWeight: FontWeight.bold,
         ),
-        behavior: SnackBarBehavior.floating,
       ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Table / Nom : ${info.tableOrName}',
+            style: const TextStyle(color: AppColors.textBrown),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Total : ${total.toStringAsFixed(3)} DT',
+            style: const TextStyle(
+              color: AppColors.orangePrimary,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Annuler',
+              style: TextStyle(color: AppColors.textSecondary)),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, true),
+          style: FilledButton.styleFrom(
+            backgroundColor: AppColors.orangePrimary,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14)),
+          ),
+          child: const Text('Commander'),
+        ),
+      ],
     );
   }
-
-  return info;
 }

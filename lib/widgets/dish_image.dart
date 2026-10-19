@@ -56,7 +56,7 @@ class DishImage extends StatelessWidget {
             ),
           );
         },
-        errorBuilder: (_, _, _) => fallback,
+        errorBuilder: (_, err, stack) => fallback,
       );
     }
 
