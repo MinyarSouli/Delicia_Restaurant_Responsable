@@ -5,14 +5,16 @@
 // Fonctionnalités :
 //  • Champs : Image (URL/asset), Nom, Description, Prix (DT), Catégorie,
 //             Plat populaire (switch), Suppléments (dynamiques)
+//  • Catégorie : liste dynamique depuis Firestore (CategoryService)
 //  • Validation de formulaire intégrée
 //  • Appel Firebase (DishService.add / DishService.update) à la soumission
 //  • Aperçu de l'image en temps réel au-dessus du formulaire
 // ─────────────────────────────────────────────────────────────────────────────
 import 'package:flutter/material.dart';
 
-import '../data/menu_data.dart';
+import '../models/category.dart';
 import '../models/dish.dart';
+import '../services/category_service.dart';
 import '../services/dish_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/dish_image.dart';
@@ -76,7 +78,7 @@ class _DishFormPageState extends State<DishFormPage> {
     _price = TextEditingController(
         text: d != null ? d.price.toStringAsFixed(3) : '');
     _image = TextEditingController(text: d?.image ?? '');
-    _category = d?.category ?? menuCategories.first.name;
+    _category = d?.category ?? '';
     _isPopular = d?.isPopular ?? false;
 
     // Pré-remplit les suppléments existants
@@ -186,166 +188,225 @@ class _DishFormPageState extends State<DishFormPage> {
             colors: [AppColors.peachTop, AppColors.peachBottom],
           ),
         ),
-        child: SafeArea(
-          child: Form(
-            key: _formKey,
-            child: ListView(
-              padding: const EdgeInsets.all(20),
-              children: [
-                // ── Aperçu de l'image (mis à jour à chaque frappe) ──────────
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(24),
-                  child: AspectRatio(
-                    aspectRatio: 16 / 9,
-                    child: _image.text.trim().isEmpty
-                        ? Container(
-                            color: AppColors.cardCream,
-                            child: const Icon(Icons.image_outlined,
-                                size: 48, color: AppColors.textSecondary))
-                        : DishImage(path: _image.text.trim()),
-                  ),
-                ),
-                const SizedBox(height: 16),
+        // ════════════════════════════════════════════════════════════════════
+        // StreamBuilder : écoute les catégories en temps réel pour le dropdown
+        // ════════════════════════════════════════════════════════════════════
+        child: StreamBuilder<List<MenuCategory>>(
+          stream: CategoryService.instance.watchCategories(),
+          builder: (context, catSnap) {
+            final categories = catSnap.data ?? [];
 
-                // ── Champ : URL ou chemin d'image ───────────────────────────
-                TextFormField(
-                  controller: _image,
-                  decoration:
-                      _deco('Image (URL ou assets/images/...)'),
-                  // Rafraîchit l'aperçu au-dessus à chaque caractère tapé
-                  onChanged: (_) => setState(() {}),
-                ),
-                const SizedBox(height: 14),
+            // Initialise _category avec la première catégorie disponible
+            // (si pas encore initialisé et des catégories existent)
+            if (_category.isEmpty && categories.isNotEmpty) {
+              _category = categories.first.name;
+            }
 
-                // ── Champ : Nom du plat (obligatoire) ───────────────────────
-                TextFormField(
-                  controller: _name,
-                  decoration: _deco('Nom du plat'),
-                  validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? 'Nom obligatoire' : null,
-                ),
-                const SizedBox(height: 14),
+            // Vérifie que la catégorie sélectionnée existe encore dans la liste
+            // (protection contre suppression de catégorie)
+            if (categories.isNotEmpty &&
+                !categories.any((c) => c.name == _category)) {
+              _category = categories.first.name;
+            }
 
-                // ── Champ : Description ─────────────────────────────────────
-                TextFormField(
-                  controller: _desc,
-                  maxLines: 3,
-                  decoration: _deco('Description'),
-                ),
-                const SizedBox(height: 14),
-
-                // ── Champ : Prix en DT ──────────────────────────────────────
-                TextFormField(
-                  controller: _price,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  decoration: _deco('Prix (DT)', hint: '12.500'),
-                  validator: (v) {
-                    final p = double.tryParse(
-                        (v ?? '').trim().replaceAll(',', '.'));
-                    return (p == null || p <= 0) ? 'Prix invalide' : null;
-                  },
-                ),
-                const SizedBox(height: 14),
-
-                // ── Champ : Catégorie (Dropdown) ────────────────────────────
-                DropdownButtonFormField<String>(
-                  initialValue: _category,
-                  decoration: _deco('Catégorie'),
-                  items: menuCategories
-                      .map((c) =>
-                          DropdownMenuItem(value: c.name, child: Text(c.name)))
-                      .toList(),
-                  onChanged: (v) => setState(() => _category = v!),
-                ),
-                const SizedBox(height: 8),
-
-                // ── Switch : Plat populaire ──────────────────────────────────
-                SwitchListTile(
-                  value: _isPopular,
-                  onChanged: (v) => setState(() => _isPopular = v),
-                  activeThumbColor: AppColors.orangePrimary,
-                  title: const Text('Plat populaire'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-                const SizedBox(height: 8),
-
-                // ── Section Suppléments (lignes dynamiques) ─────────────────
-                Row(
+            return SafeArea(
+              child: Form(
+                key: _formKey,
+                child: ListView(
+                  padding: const EdgeInsets.all(20),
                   children: [
-                    const Expanded(
-                      child: Text('Suppléments',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                              color: AppColors.textBrown)),
+                    // ── Aperçu de l'image (mis à jour à chaque frappe) ──────
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(24),
+                      child: AspectRatio(
+                        aspectRatio: 16 / 9,
+                        child: _image.text.trim().isEmpty
+                            ? Container(
+                                color: AppColors.cardCream,
+                                child: const Icon(Icons.image_outlined,
+                                    size: 48, color: AppColors.textSecondary))
+                            : DishImage(path: _image.text.trim()),
+                      ),
                     ),
-                    TextButton.icon(
-                      onPressed: () => setState(() => _supps.add(_SuppRow())),
-                      icon: const Icon(Icons.add),
-                      label: const Text('Ajouter'),
+                    const SizedBox(height: 16),
+
+                    // ── Champ : URL ou chemin d'image ───────────────────────
+                    TextFormField(
+                      controller: _image,
+                      decoration:
+                          _deco('Image (URL ou assets/images/...)'),
+                      // Rafraîchit l'aperçu au-dessus à chaque caractère tapé
+                      onChanged: (_) => setState(() {}),
                     ),
-                  ],
-                ),
-                // Affiche une ligne par supplément
-                for (int i = 0; i < _supps.length; i++)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Row(
+                    const SizedBox(height: 14),
+
+                    // ── Champ : Nom du plat (obligatoire) ───────────────────
+                    TextFormField(
+                      controller: _name,
+                      decoration: _deco('Nom du plat'),
+                      validator: (v) =>
+                          (v == null || v.trim().isEmpty) ? 'Nom obligatoire' : null,
+                    ),
+                    const SizedBox(height: 14),
+
+                    // ── Champ : Description ─────────────────────────────────
+                    TextFormField(
+                      controller: _desc,
+                      maxLines: 3,
+                      decoration: _deco('Description'),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // ── Champ : Prix en DT ──────────────────────────────────
+                    TextFormField(
+                      controller: _price,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration: _deco('Prix (DT)', hint: '12.500'),
+                      validator: (v) {
+                        final p = double.tryParse(
+                            (v ?? '').trim().replaceAll(',', '.'));
+                        return (p == null || p <= 0) ? 'Prix invalide' : null;
+                      },
+                    ),
+                    const SizedBox(height: 14),
+
+                    // ── Champ : Catégorie (Dropdown dynamique depuis Firestore)
+                    if (categories.isEmpty)
+                      // Chargement ou aucune catégorie
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppColors.cardCream,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          children: [
+                            const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppColors.orangePrimary),
+                            ),
+                            const SizedBox(width: 12),
+                            Text('Chargement des catégories...',
+                                style: TextStyle(
+                                    color: AppColors.textSecondary)),
+                          ],
+                        ),
+                      )
+                    else
+                      DropdownButtonFormField<String>(
+                        initialValue: _category.isEmpty ? null : _category,
+                        decoration: _deco('Catégorie'),
+                        items: categories
+                            .map((c) => DropdownMenuItem(
+                                value: c.name,
+                                child: Row(
+                                  children: [
+                                    Icon(c.icon,
+                                        size: 18,
+                                        color: AppColors.textSecondary),
+                                    const SizedBox(width: 8),
+                                    Text(c.name),
+                                  ],
+                                )))
+                            .toList(),
+                        onChanged: (v) => setState(() => _category = v!),
+                        validator: (v) =>
+                            (v == null || v.isEmpty) ? 'Catégorie obligatoire' : null,
+                      ),
+                    const SizedBox(height: 8),
+
+                    // ── Switch : Plat populaire ──────────────────────────────
+                    SwitchListTile(
+                      value: _isPopular,
+                      onChanged: (v) => setState(() => _isPopular = v),
+                      activeThumbColor: AppColors.orangePrimary,
+                      title: const Text('Plat populaire'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    const SizedBox(height: 8),
+
+                    // ── Section Suppléments (lignes dynamiques) ─────────────
+                    Row(
                       children: [
-                        // Nom du supplément
-                        Expanded(
-                          flex: 3,
-                          child: TextFormField(
-                              controller: _supps[i].name,
-                              decoration: _deco('Nom')),
+                        const Expanded(
+                          child: Text('Suppléments',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                  color: AppColors.textBrown)),
                         ),
-                        const SizedBox(width: 8),
-                        // Prix du supplément
-                        Expanded(
-                          flex: 2,
-                          child: TextFormField(
-                            controller: _supps[i].price,
-                            keyboardType: const TextInputType.numberWithOptions(
-                                decimal: true),
-                            decoration: _deco('Prix'),
-                          ),
-                        ),
-                        // Bouton suppression de la ligne
-                        IconButton(
-                          icon:
-                              const Icon(Icons.close, color: AppColors.error),
-                          onPressed: () => setState(() {
-                            _supps.removeAt(i).dispose();
-                          }),
+                        TextButton.icon(
+                          onPressed: () => setState(() => _supps.add(_SuppRow())),
+                          icon: const Icon(Icons.add),
+                          label: const Text('Ajouter'),
                         ),
                       ],
                     ),
-                  ),
+                    // Affiche une ligne par supplément
+                    for (int i = 0; i < _supps.length; i++)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Row(
+                          children: [
+                            // Nom du supplément
+                            Expanded(
+                              flex: 3,
+                              child: TextFormField(
+                                  controller: _supps[i].name,
+                                  decoration: _deco('Nom')),
+                            ),
+                            const SizedBox(width: 8),
+                            // Prix du supplément
+                            Expanded(
+                              flex: 2,
+                              child: TextFormField(
+                                controller: _supps[i].price,
+                                keyboardType: const TextInputType.numberWithOptions(
+                                    decimal: true),
+                                decoration: _deco('Prix'),
+                              ),
+                            ),
+                            // Bouton suppression de la ligne
+                            IconButton(
+                              icon:
+                                  const Icon(Icons.close, color: AppColors.error),
+                              onPressed: () => setState(() {
+                                _supps.removeAt(i).dispose();
+                              }),
+                            ),
+                          ],
+                        ),
+                      ),
 
-                const SizedBox(height: 20),
+                    const SizedBox(height: 20),
 
-                // ── Bouton de soumission Firebase ───────────────────────────
-                FilledButton(
-                  onPressed: _saving ? null : _save,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.orangePrimary,
-                    minimumSize: const Size.fromHeight(52),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16)),
-                  ),
-                  // Indicateur de chargement pendant la sauvegarde Firebase
-                  child: _saving
-                      ? const SizedBox(
-                          height: 22,
-                          width: 22,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white))
-                      : Text(_isEdit ? 'Enregistrer' : 'Ajouter le plat'),
+                    // ── Bouton de soumission Firebase ───────────────────────
+                    FilledButton(
+                      onPressed: _saving ? null : _save,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.orangePrimary,
+                        minimumSize: const Size.fromHeight(52),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16)),
+                      ),
+                      // Indicateur de chargement pendant la sauvegarde Firebase
+                      child: _saving
+                          ? const SizedBox(
+                              height: 22,
+                              width: 22,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white))
+                          : Text(_isEdit ? 'Enregistrer' : 'Ajouter le plat'),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         ),
       ),
     );

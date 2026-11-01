@@ -1,22 +1,10 @@
-import 'package:flutter/material.dart';
-
+// lib/data/menu_data.dart
+// ─────────────────────────────────────────────────────────────────────────────
+// Données initiales du menu (plats uniquement).
+// La classe MenuCategory est définie dans models/category.dart et stockée
+// dans Firestore. Ce fichier ne contient plus que les plats pour le seed.
+// ─────────────────────────────────────────────────────────────────────────────
 import '../models/dish.dart';
-
-/// Une catégorie du menu avec son icône.
-class MenuCategory {
-  final String name;
-  final IconData icon;
-
-  const MenuCategory(this.name, this.icon);
-}
-
-const List<MenuCategory> menuCategories = [
-  MenuCategory('Fast-food', Icons.lunch_dining),
-  MenuCategory('Plats', Icons.dinner_dining),
-  MenuCategory('Café', Icons.coffee),
-  MenuCategory('Boissons', Icons.local_drink),
-  MenuCategory('Desserts', Icons.icecream),
-];
 
 // Image Unsplash à partir de son identifiant.
 // Pour utiliser tes propres images, remplace _img('...') par
@@ -161,7 +149,7 @@ final List<Dish> menuDishes = [
   ),
   Dish(
     id: 'bo2',
-    name: 'Jus d\'Orange Frais',
+    name: "Jus d'Orange Frais",
     description: 'Oranges pressées à la commande, sans sucre ajouté.',
     price: 5.000,
     category: 'Boissons',
